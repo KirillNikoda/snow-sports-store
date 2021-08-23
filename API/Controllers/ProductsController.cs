@@ -8,41 +8,48 @@ using Core.Specifications;
 using API.DTOs;
 using System.Linq;
 using AutoMapper;
+using Microsoft.Extensions.Configuration;
+using API.Helpers;
 
 namespace API.Controllers
 {
-	[ApiController]
-	[Route("api/[controller]")]
-	public class ProductsController : ControllerBase
+	public class ProductsController : BaseApiController
 	{
 		private readonly IGenericRepository<Product> _productsRepo;
 		private readonly IGenericRepository<ProductBrand> _productBrandRepo;
 		private readonly IGenericRepository<ProductType> _productTypeRepo;
 		private readonly IMapper _mapper;
+		private readonly IConfiguration _config;
 
 		public ProductsController(
 			IGenericRepository<Product> productsRepo,
 			IGenericRepository<ProductBrand> productBrandRepo,
 			IGenericRepository<ProductType> productTypeRepo,
-			IMapper mapper
+			IMapper mapper,
+			IConfiguration config
 		)
 		{
 			_productsRepo = productsRepo;
 			_productBrandRepo = productBrandRepo;
 			_productTypeRepo = productTypeRepo;
 			_mapper = mapper;
+			_config = config;
 		}
 
 		[HttpGet]
-		public async Task<ActionResult<IReadOnlyList<ProductToReturnDto>>> GetProducts()
+		public async Task<ActionResult<Pagination<ProductToReturnDto>>> GetProducts([FromQuery] ProductSpecParams productParams)
 		{
-			var spec = new ProductsWithTypesAndBrandsSpecification();
+			var spec = new ProductsWithTypesAndBrandsSpecification(productParams);
+			var countSpec = new ProductWithFiltersForCountSpecification(productParams);
+
+			var totalItems = await _productsRepo.CountAsync(countSpec);
 
 			var products = await _productsRepo.ListAsync(spec);
 
-			return products
-							.Select(product => _mapper.Map<Product, ProductToReturnDto>(product))
-							.ToList();
+			var data = _mapper
+			.Map<IReadOnlyList<Product>, IReadOnlyList<ProductToReturnDto>>(products);
+
+			return Ok(new Pagination<ProductToReturnDto>(productParams.PageIndex, productParams.PageSize, totalItems, data));
 		}
 
 		[HttpGet("{id}")]
@@ -54,7 +61,16 @@ namespace API.Controllers
 
 			if (product != null)
 			{
-				_mapper.Map<Product, ProductToReturnDto>(product);
+				return new ProductToReturnDto
+				{
+					Id = product.Id,
+					Name = product.Name,
+					Description = product.Description,
+					Price = product.Price,
+					PictureUrl = _config["ApiUrl"] + product.PictureUrl,
+					ProductType = product.ProductType.Name,
+					ProductBrand = product.ProductBrand.Name
+				};
 			}
 
 			return NotFound("Product with that id was not found");

@@ -26,6 +26,7 @@ namespace API
 			services.AddScoped<IProductRepository, ProductRepository>();
 			services.AddScoped(typeof(IGenericRepository<>), (typeof(GenericRepository<>)));
 			services.AddAutoMapper(typeof(MappingProfiles));
+			services.AddCors();
 			services.AddControllers();
 			services.AddDbContext<StoreContext>(
 				options => options.UseNpgsql(_config.GetConnectionString("DefaultConnection"))
@@ -45,6 +46,8 @@ namespace API
 			app.UseRouting();
 
 			app.UseStaticFiles();
+
+			app.UseCors(builder => builder.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
 
 			app.UseAuthorization();
 
